@@ -76,6 +76,9 @@ class DLXsudoku(dlx.DLX):
         sdict = dict(cols)
         # Total 324 constraint
         print('Dic', sdict)
+        
+        for colname in cols:
+            print('colname', colname[0])
 
         # Create the DLX object.
         dlx.DLX.__init__(self, [(colname[0], dlx.DLX.PRIMARY) for colname in cols])
@@ -83,14 +86,12 @@ class DLXsudoku(dlx.DLX):
         # GENERATE all options: 9 * 9 * 9 = 729, add options to DLX by appendRow
         # Now create all possible rows.
         rowdict = {} # Store rowindex which is returned by appendRow
-        self.lookupdict = {}
         for i in range(self.dimsq):
             for j in range(self.dimsq):
                 for k in range(1,self.dimsq+1):
                     val =  self.appendRow([sdict[('r',i,k)], sdict[('c',j,k)], sdict[('g',i//dim,j//dim,k)], sdict[('e',i,j)]], (i,j,k))
                     print('val',i,j,k,val)
                     rowdict[(i,j,k)] = val
-                    self.lookupdict[val] = (i,j,k)
 
         # Now we want to process grid, which we take to be a string of length 81 representing the puzzle.
         # An entry of 0 means blank.
@@ -114,6 +115,7 @@ class DLXsudoku(dlx.DLX):
         '''Create a string representing the solution grid in nice format.'''
 
         grid = self.createSolutionGrid(sol)
+        print(grid)
         return reduce(lambda x,y:x+y, [reduce(lambda x,y:x+y, [str(grid[r][c]) + ('|' if c % self.dim == self.dim-1 and c != self.dimsq-1 else '') for c in range(self.dimsq)], '') + ('\n' if r != self.dimsq-1 else '') + ((('-'*self.dim + '+')*(self.dim-1) + '-'*self.dim + '\n') if r % self.dim == self.dim-1 and r != self.dimsq-1 else '') for r in range(self.dimsq)], '')
                 
 
@@ -188,9 +190,13 @@ if __name__ == '__main__':
     s = int(sys.argv[1])
     printFlag = (False if len(sys.argv) == 3 else (True if sys.argv[3] == 'T' else False))
     d = DLXsudoku(sys.argv[2],s)
+    sol_cnt = 0
     for sol in d.solve():
+        sol_cnt+=1
+        print(sol)
         if printFlag:
             print(d.createSolutionString(sol))
         else:
             print('SOLUTION:')
             print(d.createSolutionGridString(sol))
+    print('Total solution cnt:', sol_cnt)
