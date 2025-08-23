@@ -8,7 +8,7 @@ from matplotlib.widgets import Button
 from itertools import islice
 
 # 定義拼圖形狀
-SET = 1
+SET = 3
 
 if SET == 1:
     BOAD_W = 3
@@ -119,6 +119,7 @@ class DLXbrainblock(dlx.DLX):
         self.fig = ''
         self.sol_rec = []
         self.cur_sol = 0
+        self.sol_start = 0
 
         for i in range(len(pieces)):
             print("Pieces #" + str(i))
@@ -220,6 +221,7 @@ class DLXbrainblock(dlx.DLX):
         if len(self.sol_rec) == 0:
             plt.title(f"Solution #"+str(sol_num))
             self.cur_sol = 0
+            self.sol_start = sol_num
         self.sol_rec.append(recl)
         plt.show(block=False)
 
@@ -229,7 +231,7 @@ class DLXbrainblock(dlx.DLX):
         self.cur_sol = (self.cur_sol + 1) % len(self.sol_rec)
         for rec in self.sol_rec[self.cur_sol]:
             rec.set_visible(True)
-        plt.title(f"Solution #"+str(self.cur_sol+1))
+        plt.title(f"Solution #"+str(self.sol_start + self.cur_sol))
         self.fig.canvas.draw_idle()
 
     def prev_patch(self, event):
@@ -238,7 +240,7 @@ class DLXbrainblock(dlx.DLX):
         self.cur_sol = (self.cur_sol - 1) % len(self.sol_rec)
         for rec in self.sol_rec[self.cur_sol]:
             rec.set_visible(True)
-        plt.title(f"Solution #"+str(self.cur_sol+1))
+        plt.title(f"Solution #"+str(self.sol_start + self.cur_sol))
         self.fig.canvas.draw_idle()
 
 if __name__ == '__main__':
@@ -248,8 +250,12 @@ if __name__ == '__main__':
     except ImportError:
         pass
 
-    #s = int(sys.argv[1])
-    #printFlag = (False if len(sys.argv) == 3 else (True if sys.argv[3] == 'T' else False))
+    sol_start = 1
+    sol_end = 10
+    if len(sys.argv) == 3:
+        sol_start = int(sys.argv[1])
+        sol_end = int(sys.argv[2])
+
     d = DLXbrainblock(BOAD_W, BOAD_H)
     sol_cnt = 0
 
@@ -270,14 +276,15 @@ if __name__ == '__main__':
     bprev.on_clicked(d.prev_patch)
     bnext.on_clicked(d.next_patch)
 
-    for sol in islice(d.solve(), 10):
+    for sol in islice(d.solve(), sol_end):
         sol_cnt+=1
         #print(sol)
         
         #print('SOLUTION #' + str(sol_cnt) + ':')
         #print(d.createSolutionGridString(sol))
 
-        d.visualize_solution(sol, sol_cnt)
+        if sol_cnt >= sol_start and sol_cnt <= sol_end:
+            d.visualize_solution(sol, sol_cnt)
 
     print('Total solution cnt:', sol_cnt)
 
