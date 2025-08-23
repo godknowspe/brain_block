@@ -286,7 +286,7 @@ if __name__ == '__main__':
         if sol_cnt >= sol_start and sol_cnt <= sol_end:
             d.visualize_solution(sol, sol_cnt)
 
-    print('Total solution cnt:', sol_cnt)
+        print('\rTotal solution cnt:', sol_cnt, end="", flush=True)
 
     # 等待視窗關閉才結束程式
     plt.ioff()
