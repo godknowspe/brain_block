@@ -214,14 +214,14 @@ class PuzzleGUI:
         self.ax_palette.set_xlim(-8, 2)
         self.ax_palette.set_ylim(-2, 50)
         self.ax_palette.set_aspect('equal')
-        self.ax_palette.set_title('拼圖塊 (點擊拖曳)', fontsize=14, pad=10)
+        self.ax_palette.set_title('Pieces (Click & Drag)', fontsize=14, pad=10)
         self.ax_palette.grid(True, alpha=0.3)
         
         # Board area (right)
         self.ax_board.set_xlim(-1, self.board_width + 1)
         self.ax_board.set_ylim(-1, self.board_height + 1)
         self.ax_board.set_aspect('equal')
-        self.ax_board.set_title('拼圖版 (放置拼圖)', fontsize=14, pad=10)
+        self.ax_board.set_title('Board (Place Pieces)', fontsize=14, pad=10)
         self.ax_board.grid(True, alpha=0.3)
         
         # Draw board grid
@@ -238,22 +238,22 @@ class PuzzleGUI:
         
         # Rotate button
         ax_rotate = plt.axes([0.35, y_pos, button_width, button_height])
-        self.btn_rotate = Button(ax_rotate, '旋轉 (R)')
+        self.btn_rotate = Button(ax_rotate, 'Rotate (R)')
         self.btn_rotate.on_clicked(self._on_rotate_clicked)
         
         # Remove button
         ax_remove = plt.axes([0.44, y_pos, button_width, button_height])
-        self.btn_remove = Button(ax_remove, '移除 (Del)')
+        self.btn_remove = Button(ax_remove, 'Remove (Del)')
         self.btn_remove.on_clicked(self._on_remove_clicked)
         
         # Reset button
         ax_reset = plt.axes([0.53, y_pos, button_width, button_height])
-        self.btn_reset = Button(ax_reset, '重置')
+        self.btn_reset = Button(ax_reset, 'Reset')
         self.btn_reset.on_clicked(self._on_reset_clicked)
         
         # Solve button
         ax_solve = plt.axes([0.62, y_pos, button_width, button_height])
-        self.btn_solve = Button(ax_solve, '開始求解')
+        self.btn_solve = Button(ax_solve, 'Solve')
         self.btn_solve.on_clicked(self._on_solve_clicked)
     
     def _connect_events(self):
@@ -503,9 +503,9 @@ class PuzzleGUI:
                     'coords': piece.get_board_coords()
                 })
         
-        print(f"\n開始求解，已固定 {len(fixed_pieces)} 個拼圖塊")
+        print(f"\nStarting solver with {len(fixed_pieces)} fixed pieces")
         for fp in fixed_pieces:
-            print(f"  拼圖 #{fp['index']}: {fp['coords']}")
+            print(f"  Piece #{fp['index']}: {fp['coords']}")
         
         # Close GUI and start solver
         plt.close(self.fig)
@@ -667,7 +667,7 @@ class BrainBlockSolver(dlx.DLX):
                 patches_list.append(rect)
         
         if len(self.solution_patches) == 0:
-            plt.title(f'解法 #{solution_num}')
+            plt.title(f'Solution #{solution_num}')
             self.current_solution_idx = 0
             self.solution_start_num = solution_num
         
@@ -698,7 +698,7 @@ class BrainBlockSolver(dlx.DLX):
             patch.set_visible(True)
         
         solution_num = self.solution_start_num + self.current_solution_idx
-        plt.title(f'解法 #{solution_num}')
+        plt.title(f'Solution #{solution_num}')
         self.fig.canvas.draw_idle()
 
 
@@ -714,15 +714,15 @@ def main():
     pieces = config['pieces']
     
     print("=" * 60)
-    print(f"拼圖求解器 - 拼圖組 {PUZZLE_SET}")
-    print(f"拼圖版大小: {board_width} x {board_height}")
-    print(f"拼圖塊數量: {len(pieces)}")
+    print(f"Brain Block Solver - Puzzle Set {PUZZLE_SET}")
+    print(f"Board Size: {board_width} x {board_height}")
+    print(f"Number of Pieces: {len(pieces)}")
     print("=" * 60)
-    print("\n操作說明:")
-    print("  - 點擊並拖曳拼圖塊到拼圖版上")
-    print("  - 選中拼圖塊後按 'R' 鍵或點擊旋轉按鈕來旋轉")
-    print("  - 按 'Delete' 鍵或點擊移除按鈕將拼圖塊移回")
-    print("  - 安排好初始拼圖塊後，點擊「開始求解」\n")
+    print("\nInstructions:")
+    print("  - Click and drag pieces to the board")
+    print("  - Press 'R' or click Rotate to rotate selected piece")
+    print("  - Press 'Delete' or click Remove to remove selected piece")
+    print("  - Click 'Solve' when ready\n")
     
     # Show interactive GUI
     gui = PuzzleGUI(board_width, board_height, pieces)
@@ -730,7 +730,7 @@ def main():
     
     # If user didn't solve, exit
     if fixed_pieces is None:
-        print("已取消")
+        print("Cancelled")
         return
     
     # Parse solution range from command line
@@ -742,7 +742,7 @@ def main():
             solution_start = int(sys.argv[1])
             solution_end = int(sys.argv[2])
         except ValueError:
-            print("用法: python brain_block.py [起始解] [結束解]")
+            print("Usage: python brain_block.py [start_solution] [end_solution]")
     
     # Create solver with fixed pieces
     solver = BrainBlockSolver(board_width, board_height, pieces, fixed_pieces)
@@ -761,14 +761,14 @@ def main():
     # Add navigation buttons
     ax_prev = plt.axes([0.4, 0.92, 0.08, 0.04])
     ax_next = plt.axes([0.52, 0.92, 0.08, 0.04])
-    btn_prev = Button(ax_prev, '上一個')
-    btn_next = Button(ax_next, '下一個')
+    btn_prev = Button(ax_prev, 'Prev')
+    btn_next = Button(ax_next, 'Next')
     btn_prev.on_clicked(solver.show_previous_solution)
     btn_next.on_clicked(solver.show_next_solution)
     
     # Find and display solutions
     solution_count = 0
-    print("\n正在搜尋解法...")
+    print("\nSearching for solutions...")
     
     for solution in islice(solver.solve(), solution_end):
         solution_count += 1
@@ -776,13 +776,13 @@ def main():
         if solution_start <= solution_count <= solution_end:
             solver.visualize_solution(solution, solution_count)
         
-        print(f'\r找到的解法數量: {solution_count}', end='', flush=True)
+        print(f'\rSolutions found: {solution_count}', end='', flush=True)
     
-    print(f'\n\n總共找到 {solution_count} 個解法')
+    print(f'\n\nTotal solutions found: {solution_count}')
     if solution_count > 0:
-        print(f'顯示解法 {solution_start} 到 {min(solution_count, solution_end)}')
+        print(f'Showing solutions {solution_start} to {min(solution_count, solution_end)}')
     else:
-        print('沒有找到解法！請嘗試不同的初始配置。')
+        print('No solutions found! Try a different initial configuration.')
     
     # Keep window open
     plt.ioff()
