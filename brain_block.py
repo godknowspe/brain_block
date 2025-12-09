@@ -609,8 +609,11 @@ class PuzzleGUI:
                              is_fixed = True
                              break
 
+                    # Flip y-coordinate to match setup board orientation
+                    display_y = self.board_height - 1 - y
+
                     rect = patches.Rectangle(
-                        (x, y), 1, 1,
+                        (x, display_y), 1, 1,
                         linewidth=2.5 if is_fixed else 1.5,
                         edgecolor='darkred' if is_fixed else 'black',
                         facecolor=color,
