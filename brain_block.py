@@ -193,12 +193,17 @@ class PuzzleGUI:
         
         self.selected_piece = None
         self.drag_offset = (0, 0)
-        self.fixed_pieces = []  # Pieces locked on board
+
+        # Solution state
+        self.solver_solutions = []
+        self.solution_patches = []
+        self.current_solution_idx = 0
         
         # Setup matplotlib figure
-        self.fig, (self.ax_palette, self.ax_board) = plt.subplots(
-            1, 2, figsize=(16, 8),
-            gridspec_kw={'width_ratios': [1, 2]}
+        # Split into 3 columns: Palette | Setup Board | Solution Board
+        self.fig, (self.ax_palette, self.ax_setup, self.ax_solution) = plt.subplots(
+            1, 3, figsize=(18, 8),
+            gridspec_kw={'width_ratios': [0.5, 1.25, 1.25]}
         )
         
         self._setup_axes()
@@ -206,7 +211,6 @@ class PuzzleGUI:
         self._connect_events()
         self._draw_all()
         
-        self.solving = False
     
     def _setup_axes(self):
         """Configure plot axes."""
@@ -214,48 +218,72 @@ class PuzzleGUI:
         self.ax_palette.set_xlim(-8, 2)
         self.ax_palette.set_ylim(-2, 50)
         self.ax_palette.set_aspect('equal')
-        self.ax_palette.set_title('Pieces (Click & Drag)', fontsize=14, pad=10)
+        self.ax_palette.set_title('Palette', fontsize=12, pad=10)
         self.ax_palette.grid(True, alpha=0.3)
+        self.ax_palette.set_axis_off() # Hide axis ticks for cleaner look
         
-        # Board area (right)
-        self.ax_board.set_xlim(0, self.board_width)
-        self.ax_board.set_ylim(0, self.board_height)
-        self.ax_board.set_aspect('equal')
-        self.ax_board.set_title('Board (Place Pieces)', fontsize=14, pad=10)
-        self.ax_board.grid(True, alpha=0.3)
+        # Setup Board area (center)
+        self.ax_setup.set_xlim(0, self.board_width)
+        self.ax_setup.set_ylim(0, self.board_height)
+        self.ax_setup.set_aspect('equal')
+        self.ax_setup.set_title('Setup (Place Pieces)', fontsize=14, pad=10)
+        self.ax_setup.grid(True, alpha=0.3)
+        self.ax_setup.invert_yaxis() # Usually puzzles are top-left origin?
+        # Wait, the original code didn't invert y axis. Let's keep it consistent.
+        # Original code used default y axis (bottom-up).
+        # Let's check: set_ylim(0, height). Matplotlib default is 0 at bottom.
         
-        # Draw board grid
+        # Draw board grid for Setup
         for x in range(self.board_width + 1):
-            self.ax_board.axvline(x, color='black', linewidth=2)
+            self.ax_setup.axvline(x, color='black', linewidth=2)
         for y in range(self.board_height + 1):
-            self.ax_board.axhline(y, color='black', linewidth=2)
+            self.ax_setup.axhline(y, color='black', linewidth=2)
+
+        # Solution Board area (right)
+        self.ax_solution.set_xlim(0, self.board_width)
+        self.ax_solution.set_ylim(0, self.board_height)
+        self.ax_solution.set_aspect('equal')
+        self.ax_solution.set_title('Solution Result', fontsize=14, pad=10)
+        self.ax_solution.axis('off') # Hide axis for cleaner solution view
     
     def _setup_buttons(self):
         """Create control buttons."""
         button_height = 0.04
-        button_width = 0.08
+        button_width = 0.06
         y_pos = 0.02
         
-        # Rotate button
-        ax_rotate = plt.axes([0.35, y_pos, button_width, button_height])
-        self.btn_rotate = Button(ax_rotate, 'Rotate (R)')
+        # Setup Board Buttons (Center area roughly)
+        # Assuming Setup is roughly 0.2 to 0.55 in figure coords
+        start_x_setup = 0.25
+        gap = 0.07
+
+        ax_rotate = plt.axes([start_x_setup, y_pos, button_width, button_height])
+        self.btn_rotate = Button(ax_rotate, 'Rotate')
         self.btn_rotate.on_clicked(self._on_rotate_clicked)
         
-        # Remove button
-        ax_remove = plt.axes([0.44, y_pos, button_width, button_height])
-        self.btn_remove = Button(ax_remove, 'Remove (Del)')
+        ax_remove = plt.axes([start_x_setup + gap, y_pos, button_width, button_height])
+        self.btn_remove = Button(ax_remove, 'Delete')
         self.btn_remove.on_clicked(self._on_remove_clicked)
         
-        # Reset button
-        ax_reset = plt.axes([0.53, y_pos, button_width, button_height])
+        ax_reset = plt.axes([start_x_setup + gap * 2, y_pos, button_width, button_height])
         self.btn_reset = Button(ax_reset, 'Reset')
         self.btn_reset.on_clicked(self._on_reset_clicked)
         
-        # Solve button
-        ax_solve = plt.axes([0.62, y_pos, button_width, button_height])
-        self.btn_solve = Button(ax_solve, 'Solve')
+        ax_solve = plt.axes([start_x_setup + gap * 3, y_pos, button_width, button_height])
+        self.btn_solve = Button(ax_solve, 'Solve', color='lightgreen')
         self.btn_solve.on_clicked(self._on_solve_clicked)
-    
+
+        # Solution Board Buttons (Right area)
+        start_x_sol = 0.70
+
+        ax_prev = plt.axes([start_x_sol, y_pos, button_width, button_height])
+        self.btn_prev = Button(ax_prev, 'Prev')
+        self.btn_prev.on_clicked(self._on_prev_solution)
+
+        ax_next = plt.axes([start_x_sol + gap, y_pos, button_width, button_height])
+        self.btn_next = Button(ax_next, 'Next')
+        self.btn_next.on_clicked(self._on_next_solution)
+
     def _connect_events(self):
         """Connect mouse and keyboard events."""
         self.fig.canvas.mpl_connect('button_press_event', self._on_mouse_press)
@@ -265,7 +293,7 @@ class PuzzleGUI:
     
     def _draw_all(self):
         """Redraw all pieces."""
-        # Clear existing patches
+        # Clear existing patches on Setup/Palette
         for piece in self.pieces:
             for patch in piece.patches:
                 patch.remove()
@@ -282,7 +310,7 @@ class PuzzleGUI:
         board_coords = piece.get_board_coords()
         
         # Determine which axis to draw on
-        ax = self.ax_board if piece.placed else self.ax_palette
+        ax = self.ax_setup if piece.placed else self.ax_palette
         
         for x, y in board_coords:
             # Determine edge color based on state
@@ -320,7 +348,7 @@ class PuzzleGUI:
         """Find piece at given coordinates."""
         # Check in reverse order (topmost first)
         for piece in reversed(self.pieces):
-            correct_ax = self.ax_board if piece.placed else self.ax_palette
+            correct_ax = self.ax_setup if piece.placed else self.ax_palette
             if correct_ax != ax:
                 continue
             if piece.contains_point(x, y):
@@ -348,7 +376,7 @@ class PuzzleGUI:
     
     def _on_mouse_press(self, event):
         """Handle mouse click."""
-        if event.inaxes not in [self.ax_palette, self.ax_board]:
+        if event.inaxes not in [self.ax_palette, self.ax_setup]:
             return
         
         piece = self._find_piece_at(event.xdata, event.ydata, event.inaxes)
@@ -379,7 +407,7 @@ class PuzzleGUI:
     
     def _on_mouse_move(self, event):
         """Handle mouse drag."""
-        if not self.selected_piece or event.inaxes not in [self.ax_palette, self.ax_board]:
+        if not self.selected_piece or event.inaxes not in [self.ax_palette, self.ax_setup]:
             return
         
         # Move piece to follow mouse
@@ -389,7 +417,7 @@ class PuzzleGUI:
         )
         
         # Update placed status based on which axis
-        self.selected_piece.placed = (event.inaxes == self.ax_board)
+        self.selected_piece.placed = (event.inaxes == self.ax_setup)
         
         self._draw_all()
     
@@ -510,16 +538,105 @@ class PuzzleGUI:
         print(f"\nStarting solver with {len(fixed_pieces)} fixed pieces")
         for fp in fixed_pieces:
             print(f"  Piece #{fp['index']}: {fp['coords']}")
+
+        # Clear previous solutions
+        self.ax_solution.clear()
+        self.ax_solution.set_title("Solving...", fontsize=14, pad=10)
+        self.ax_solution.axis('off')
+        self.fig.canvas.draw()
+
+        # Run solver (search for first 20 solutions)
+        solver = BrainBlockSolver(self.board_width, self.board_height, self.original_pieces, fixed_pieces)
+
+        self.solver_solutions = []
+        try:
+            solution_limit = 20
+            for solution in islice(solver.solve(), solution_limit):
+                # Store necessary data to reconstruct solution grid later
+                # BrainBlockSolver.visualize_solution requires reconstructing the grid
+                # So we can just store the DLX result (list of row indices)
+                # And use the solver instance (which holds the mappings) to interpret it
+                # However, solver instance is local. We should probably keep it or helper methods.
+
+                # Let's convert the solution to a grid immediately to store it
+                grid = solver.create_solution_grid(solution)
+                self.solver_solutions.append(grid)
+                print(f"Found solution {len(self.solver_solutions)}")
+        except Exception as e:
+            print(f"Error during solving: {e}")
+            import traceback
+            traceback.print_exc()
+
+        print(f"Total solutions found: {len(self.solver_solutions)}")
+
+        if not self.solver_solutions:
+            self.ax_solution.set_title("No Solution Found", fontsize=14, pad=10)
+            self.ax_solution.axis('off')
+        else:
+            self.current_solution_idx = 0
+            self._display_current_solution()
+
+        self.fig.canvas.draw()
+
+    def _display_current_solution(self):
+        """Display the solution at current_solution_idx on ax_solution."""
+        self.ax_solution.clear()
+        self.ax_solution.axis('off')
+        self.ax_solution.set_xlim(0, self.board_width)
+        self.ax_solution.set_ylim(0, self.board_height)
+        self.ax_solution.set_aspect('equal')
+
+        if not self.solver_solutions:
+            return
+
+        grid = self.solver_solutions[self.current_solution_idx]
         
-        # Close GUI and start solver
-        plt.close(self.fig)
-        self.solving = True
-        self.fixed_pieces = fixed_pieces
+        # Reuse pieces fixed pieces logic? No, just draw the grid.
+        # Check if we have fixed pieces in this grid?
+        # The grid contains piece indices.
+
+        for x in range(self.board_width):
+            for y in range(self.board_height):
+                piece_idx = grid[x][y]
+                if piece_idx >= 0:
+                    color = self.cmap(piece_idx / 20)[:3]
+
+                    # Check if this cell is part of a fixed piece from current GUI state?
+                    # We can iterate through self.pieces and see if they are placed and cover (x,y)
+                    is_fixed = False
+                    for p in self.pieces:
+                        if p.placed and p.piece_index == piece_idx and p.contains_point(x, y):
+                             is_fixed = True
+                             break
+
+                    rect = patches.Rectangle(
+                        (x, y), 1, 1,
+                        linewidth=2.5 if is_fixed else 1.5,
+                        edgecolor='darkred' if is_fixed else 'black',
+                        facecolor=color,
+                        alpha=0.9 if is_fixed else 0.7
+                    )
+                    self.ax_solution.add_patch(rect)
+
+        self.ax_solution.set_title(f'Solution {self.current_solution_idx + 1} / {len(self.solver_solutions)}', fontsize=14, pad=10)
+
+    def _on_prev_solution(self, event):
+        if not self.solver_solutions:
+            return
+        self.current_solution_idx = (self.current_solution_idx - 1) % len(self.solver_solutions)
+        self._display_current_solution()
+        self.fig.canvas.draw()
+
+    def _on_next_solution(self, event):
+        if not self.solver_solutions:
+            return
+        self.current_solution_idx = (self.current_solution_idx + 1) % len(self.solver_solutions)
+        self._display_current_solution()
+        self.fig.canvas.draw()
     
     def show(self):
         """Display the GUI."""
         plt.show()
-        return self.fixed_pieces if self.solving else None
 
 
 # ============================================================================
@@ -536,13 +653,6 @@ class BrainBlockSolver(dlx.DLX):
         self.num_pieces = len(pieces)
         self.fixed_pieces = fixed_pieces or []
         
-        # Visualization state
-        self.fig = None
-        self.ax = None
-        self.solution_patches = []
-        self.current_solution_idx = 0
-        self.solution_start_num = 0
-        
         # Initialize DLX columns
         columns = self._create_columns()
         column_dict = dict(columns)
@@ -552,9 +662,6 @@ class BrainBlockSolver(dlx.DLX):
         
         # Generate and add all possible placements
         self._generate_rows(column_dict)
-        
-        # Pre-select fixed pieces
-        self._apply_fixed_pieces()
     
     def _create_columns(self):
         """Create DLX columns for board cells and piece usage."""
@@ -620,12 +727,6 @@ class BrainBlockSolver(dlx.DLX):
                     cols.append(column_dict[('piece', p_idx)])
                     self.appendRow(cols, (placement, p_idx))
     
-    def _apply_fixed_pieces(self):
-        """Pre-apply fixed pieces to the solution."""
-        # Fixed pieces are already excluded from DLX constraints
-        # They will be added to visualization later
-        pass
-    
     def create_solution_grid(self, solution):
         """Convert DLX solution to 2D grid."""
         grid = [[-1] * self.board_height for _ in range(self.board_width)]
@@ -642,68 +743,6 @@ class BrainBlockSolver(dlx.DLX):
                 grid[x][y] = piece_idx
         
         return grid
-    
-    def visualize_solution(self, solution, solution_num):
-        """Visualize solution using matplotlib."""
-        grid = self.create_solution_grid(solution)
-        cmap = plt.get_cmap('tab20')
-        
-        patches_list = []
-        for x in range(self.board_width):
-            for y in range(self.board_height):
-                piece_idx = grid[x][y]
-                color = cmap(piece_idx / 20)[:3] if piece_idx >= 0 else (1, 1, 1)
-                
-                # Check if this is a fixed piece
-                is_fixed = any(
-                    (x, y) in fp['coords'] for fp in self.fixed_pieces
-                )
-                
-                rect = patches.Rectangle(
-                    (x, y), 1, 1,
-                    linewidth=2.5 if is_fixed else 1.5,
-                    edgecolor='darkred' if is_fixed else 'black',
-                    facecolor=color,
-                    alpha=0.9 if is_fixed else 0.7
-                )
-                self.ax.add_patch(rect)
-                rect.set_visible(len(self.solution_patches) == 0)
-                patches_list.append(rect)
-        
-        if len(self.solution_patches) == 0:
-            plt.title(f'Solution #{solution_num}')
-            self.current_solution_idx = 0
-            self.solution_start_num = solution_num
-        
-        self.solution_patches.append(patches_list)
-        plt.show(block=False)
-    
-    def show_next_solution(self, event):
-        """Button callback to show next solution."""
-        self._switch_solution(1)
-    
-    def show_previous_solution(self, event):
-        """Button callback to show previous solution."""
-        self._switch_solution(-1)
-    
-    def _switch_solution(self, direction):
-        """Switch between solutions."""
-        if not self.solution_patches:
-            return
-        
-        for patch in self.solution_patches[self.current_solution_idx]:
-            patch.set_visible(False)
-        
-        self.current_solution_idx = (
-            (self.current_solution_idx + direction) % len(self.solution_patches)
-        )
-        
-        for patch in self.solution_patches[self.current_solution_idx]:
-            patch.set_visible(True)
-        
-        solution_num = self.solution_start_num + self.current_solution_idx
-        plt.title(f'Solution #{solution_num}')
-        self.fig.canvas.draw_idle()
 
 
 # ============================================================================
@@ -723,74 +762,16 @@ def main():
     print(f"Number of Pieces: {len(pieces)}")
     print("=" * 60)
     print("\nInstructions:")
-    print("  - Click and drag pieces to the board")
-    print("  - Press 'R' or click Rotate to rotate selected piece")
-    print("  - Press 'Delete' or click Remove to remove selected piece")
-    print("  - Click 'Solve' when ready\n")
+    print("  - Left Panel: Palette")
+    print("  - Center Panel: Setup Board. Drag pieces here.")
+    print("  - Right Panel: Solution Result.")
+    print("  - Buttons allow Rotate, Delete, Reset, and Solve.")
+    print("  - After solving, use Prev/Next to view solutions.")
+    print("  - You can modify the setup and Solve again.\n")
     
     # Show interactive GUI
     gui = PuzzleGUI(board_width, board_height, pieces)
-    fixed_pieces = gui.show()
-    
-    # If user didn't solve, exit
-    if fixed_pieces is None:
-        print("Cancelled")
-        return
-    
-    # Parse solution range from command line
-    solution_start = 1
-    solution_end = 20
-    
-    if len(sys.argv) == 3:
-        try:
-            solution_start = int(sys.argv[1])
-            solution_end = int(sys.argv[2])
-        except ValueError:
-            print("Usage: python brain_block.py [start_solution] [end_solution]")
-    
-    # Create solver with fixed pieces
-    solver = BrainBlockSolver(board_width, board_height, pieces, fixed_pieces)
-    
-    # Setup visualization
-    plt.ion()
-    fig, ax = plt.subplots(figsize=(12, 8))
-    ax.set_xlim(0, board_width)
-    ax.set_ylim(0, board_height)
-    ax.set_aspect('equal')
-    ax.axis('off')
-    
-    solver.fig = fig
-    solver.ax = ax
-    
-    # Add navigation buttons
-    ax_prev = plt.axes([0.4, 0.92, 0.08, 0.04])
-    ax_next = plt.axes([0.52, 0.92, 0.08, 0.04])
-    btn_prev = Button(ax_prev, 'Prev')
-    btn_next = Button(ax_next, 'Next')
-    btn_prev.on_clicked(solver.show_previous_solution)
-    btn_next.on_clicked(solver.show_next_solution)
-    
-    # Find and display solutions
-    solution_count = 0
-    print("\nSearching for solutions...")
-    
-    for solution in islice(solver.solve(), solution_end):
-        solution_count += 1
-        
-        if solution_start <= solution_count <= solution_end:
-            solver.visualize_solution(solution, solution_count)
-        
-        print(f'\rSolutions found: {solution_count}', end='', flush=True)
-    
-    print(f'\n\nTotal solutions found: {solution_count}')
-    if solution_count > 0:
-        print(f'Showing solutions {solution_start} to {min(solution_count, solution_end)}')
-    else:
-        print('No solutions found! Try a different initial configuration.')
-    
-    # Keep window open
-    plt.ioff()
-    plt.show()
+    gui.show()
 
 
 if __name__ == '__main__':
