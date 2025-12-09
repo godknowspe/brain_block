@@ -218,8 +218,8 @@ class PuzzleGUI:
         self.ax_palette.grid(True, alpha=0.3)
         
         # Board area (right)
-        self.ax_board.set_xlim(-1, self.board_width + 1)
-        self.ax_board.set_ylim(-1, self.board_height + 1)
+        self.ax_board.set_xlim(0, self.board_width)
+        self.ax_board.set_ylim(0, self.board_height)
         self.ax_board.set_aspect('equal')
         self.ax_board.set_title('Board (Place Pieces)', fontsize=14, pad=10)
         self.ax_board.grid(True, alpha=0.3)
