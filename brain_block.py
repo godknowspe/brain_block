@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Brain Block Puzzle Solver with Interactive GUI
+Brain Block Puzzle Solver with Enhanced Interactive GUI
 Allows users to place initial pieces before solving
 """
 
@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.widgets import Button
 import numpy as np
+from matplotlib.colors import LinearSegmentedColormap
 
 # ============================================================================
 # PUZZLE CONFIGURATIONS
@@ -60,6 +61,14 @@ PUZZLE_SETS = {
 }
 
 PUZZLE_SET = 3
+
+# Enhanced color palette - vibrant and distinct colors
+PIECE_COLORS = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+    '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52B788',
+    '#E63946', '#06FFA5', '#FFB703', '#8338EC', '#3A86FF',
+    '#FB5607', '#C77DFF', '#06D6A0', '#FF006E', '#FFBE0B'
+]
 
 # ============================================================================
 # GEOMETRIC TRANSFORMATIONS
@@ -167,44 +176,44 @@ class InteractivePiece:
 
 
 # ============================================================================
-# INTERACTIVE GUI
+# ENHANCED INTERACTIVE GUI
 # ============================================================================
 
 class PuzzleGUI:
-    """Interactive GUI for setting up initial puzzle state."""
+    """Enhanced Interactive GUI for setting up initial puzzle state."""
     
     def __init__(self, board_width, board_height, pieces):
         self.board_width = board_width
         self.board_height = board_height
         self.original_pieces = pieces
-        self.cmap = plt.get_cmap('tab20')
         
-        # Create interactive pieces
+        # Create interactive pieces with enhanced colors
         self.pieces = []
         palette_y = 0
         for i, piece_coords in enumerate(pieces):
-            color = self.cmap(i / 20)[:3]
-            pos = (-6, palette_y)  # Position in palette area
+            color = PIECE_COLORS[i % len(PIECE_COLORS)]
+            pos = (-6, palette_y)
             self.pieces.append(InteractivePiece(piece_coords, i, color, pos))
             
-            # Stack pieces vertically in palette
             max_y = max(y for x, y in normalize(piece_coords))
             palette_y += max_y + 2
         
         self.selected_piece = None
         self.drag_offset = (0, 0)
-
-        # Solution state
         self.solver_solutions = []
-        self.solution_patches = []
         self.current_solution_idx = 0
         
-        # Setup matplotlib figure
-        # Split into 3 columns: Palette | Setup Board | Solution Board
-        self.fig, (self.ax_palette, self.ax_setup, self.ax_solution) = plt.subplots(
-            1, 3, figsize=(18, 8),
-            gridspec_kw={'width_ratios': [0.5, 1.25, 1.25]}
-        )
+        # Setup matplotlib figure with dark theme
+        plt.style.use('dark_background')
+        self.fig = plt.figure(figsize=(20, 10), facecolor='#1a1a2e')
+
+        # Create custom grid layout
+        gs = self.fig.add_gridspec(1, 3, width_ratios=[0.6, 1.2, 1.2],
+                                   left=0.05, right=0.98, wspace=0.15)
+
+        self.ax_palette = self.fig.add_subplot(gs[0])
+        self.ax_setup = self.fig.add_subplot(gs[1])
+        self.ax_solution = self.fig.add_subplot(gs[2])
         
         self._setup_axes()
         self._setup_buttons()
@@ -213,75 +222,133 @@ class PuzzleGUI:
         
     
     def _setup_axes(self):
-        """Configure plot axes."""
-        # Palette area (left)
+        """Configure plot axes with enhanced styling."""
+        # Palette area
         self.ax_palette.set_xlim(-8, 2)
         self.ax_palette.set_ylim(-2, 50)
         self.ax_palette.set_aspect('equal')
-        self.ax_palette.set_title('Palette', fontsize=12, pad=10)
-        self.ax_palette.grid(True, alpha=0.3)
-        self.ax_palette.set_axis_off() # Hide axis ticks for cleaner look
-        
-        # Setup Board area (center)
-        self.ax_setup.set_xlim(0, self.board_width)
-        self.ax_setup.set_ylim(0, self.board_height)
-        self.ax_setup.set_aspect('equal')
-        self.ax_setup.set_title('Setup (Place Pieces)', fontsize=14, pad=10)
-        self.ax_setup.grid(True, alpha=0.3)
-        self.ax_setup.invert_yaxis() # Usually puzzles are top-left origin?
-        # Wait, the original code didn't invert y axis. Let's keep it consistent.
-        # Original code used default y axis (bottom-up).
-        # Let's check: set_ylim(0, height). Matplotlib default is 0 at bottom.
-        
-        # Draw board grid for Setup
-        for x in range(self.board_width + 1):
-            self.ax_setup.axvline(x, color='black', linewidth=2)
-        for y in range(self.board_height + 1):
-            self.ax_setup.axhline(y, color='black', linewidth=2)
+        self.ax_palette.set_title('PIECE PALETTE', fontsize=16,
+                                  fontweight='bold', color='#4ECDC4', pad=15)
+        self.ax_palette.set_facecolor('#16213e')
+        self.ax_palette.grid(True, alpha=0.2, linestyle='--', color='#4ECDC4')
+        self.ax_palette.tick_params(colors='#4ECDC4', labelsize=8)
 
-        # Solution Board area (right)
-        self.ax_solution.set_xlim(0, self.board_width)
-        self.ax_solution.set_ylim(0, self.board_height)
+        # Add decorative border
+        for spine in self.ax_palette.spines.values():
+            spine.set_edgecolor('#4ECDC4')
+            spine.set_linewidth(2)
+
+        # Setup Board area
+        self.ax_setup.set_xlim(-0.5, self.board_width + 0.5)
+        self.ax_setup.set_ylim(-0.5, self.board_height + 0.5)
+        self.ax_setup.set_aspect('equal')
+        self.ax_setup.set_title('SETUP BOARD', fontsize=16,
+                               fontweight='bold', color='#FFA07A', pad=15)
+        self.ax_setup.set_facecolor('#0f3460')
+
+        # Enhanced grid with gradient effect
+        for x in range(self.board_width + 1):
+            alpha = 0.6 if x % 2 == 0 else 0.3
+            self.ax_setup.axvline(x, color='#FFA07A', linewidth=1.5, alpha=alpha)
+        for y in range(self.board_height + 1):
+            alpha = 0.6 if y % 2 == 0 else 0.3
+            self.ax_setup.axhline(y, color='#FFA07A', linewidth=1.5, alpha=alpha)
+
+        # Add corner markers
+        marker_size = 0.15
+        for x, y in [(0, 0), (0, self.board_height),
+                     (self.board_width, 0), (self.board_width, self.board_height)]:
+            self.ax_setup.plot(x, y, 'o', color='#FFA07A', markersize=10,
+                             markeredgewidth=2, markeredgecolor='white')
+
+        for spine in self.ax_setup.spines.values():
+            spine.set_edgecolor('#FFA07A')
+            spine.set_linewidth(3)
+
+        self.ax_setup.tick_params(colors='#FFA07A', labelsize=8)
+
+        # Solution Board area
+        self.ax_solution.set_xlim(-0.5, self.board_width + 0.5)
+        self.ax_solution.set_ylim(-0.5, self.board_height + 0.5)
         self.ax_solution.set_aspect('equal')
-        self.ax_solution.set_title('Solution Result', fontsize=14, pad=10)
-        self.ax_solution.axis('off') # Hide axis for cleaner solution view
+        self.ax_solution.set_title('SOLUTION', fontsize=16,
+                                  fontweight='bold', color='#98D8C8', pad=15)
+        self.ax_solution.set_facecolor('#16213e')
+
+        for spine in self.ax_solution.spines.values():
+            spine.set_edgecolor('#98D8C8')
+            spine.set_linewidth(3)
+
+        self.ax_solution.tick_params(colors='#98D8C8', labelsize=8)
     
     def _setup_buttons(self):
-        """Create control buttons."""
-        button_height = 0.04
-        button_width = 0.06
+        """Create enhanced control buttons."""
+        button_height = 0.045
+        button_width = 0.065
         y_pos = 0.02
         
-        # Setup Board Buttons (Center area roughly)
-        # Assuming Setup is roughly 0.2 to 0.55 in figure coords
-        start_x_setup = 0.25
-        gap = 0.07
+        # Button styling
+        btn_style = {
+            'rotate': {'color': '#4ECDC4', 'hovercolor': '#45B7D1'},
+            'delete': {'color': '#E63946', 'hovercolor': '#FF6B6B'},
+            'reset': {'color': '#FFA07A', 'hovercolor': '#FFB88C'},
+            'solve': {'color': '#52B788', 'hovercolor': '#74C69D'},
+            'nav': {'color': '#8338EC', 'hovercolor': '#9D4EDD'}
+        }
 
-        ax_rotate = plt.axes([start_x_setup, y_pos, button_width, button_height])
-        self.btn_rotate = Button(ax_rotate, 'Rotate')
+        # Setup Board Buttons
+        start_x = 0.32
+        gap = 0.08
+
+        ax_rotate = plt.axes([start_x, y_pos, button_width, button_height])
+        self.btn_rotate = Button(ax_rotate, '⟲ Rotate',
+                                 color=btn_style['rotate']['color'],
+                                 hovercolor=btn_style['rotate']['hovercolor'])
+        self.btn_rotate.label.set_fontsize(10)
+        self.btn_rotate.label.set_fontweight('bold')
         self.btn_rotate.on_clicked(self._on_rotate_clicked)
         
-        ax_remove = plt.axes([start_x_setup + gap, y_pos, button_width, button_height])
-        self.btn_remove = Button(ax_remove, 'Delete')
+        ax_remove = plt.axes([start_x + gap, y_pos, button_width, button_height])
+        self.btn_remove = Button(ax_remove, '✕ Delete',
+                                color=btn_style['delete']['color'],
+                                hovercolor=btn_style['delete']['hovercolor'])
+        self.btn_remove.label.set_fontsize(10)
+        self.btn_remove.label.set_fontweight('bold')
         self.btn_remove.on_clicked(self._on_remove_clicked)
         
-        ax_reset = plt.axes([start_x_setup + gap * 2, y_pos, button_width, button_height])
-        self.btn_reset = Button(ax_reset, 'Reset')
+        ax_reset = plt.axes([start_x + gap * 2, y_pos, button_width, button_height])
+        self.btn_reset = Button(ax_reset, '↺ Reset',
+                               color=btn_style['reset']['color'],
+                               hovercolor=btn_style['reset']['hovercolor'])
+        self.btn_reset.label.set_fontsize(10)
+        self.btn_reset.label.set_fontweight('bold')
         self.btn_reset.on_clicked(self._on_reset_clicked)
         
-        ax_solve = plt.axes([start_x_setup + gap * 3, y_pos, button_width, button_height])
-        self.btn_solve = Button(ax_solve, 'Solve', color='lightgreen')
+        ax_solve = plt.axes([start_x + gap * 3, y_pos, button_width, button_height])
+        self.btn_solve = Button(ax_solve, '⚡ SOLVE',
+                               color=btn_style['solve']['color'],
+                               hovercolor=btn_style['solve']['hovercolor'])
+        self.btn_solve.label.set_fontsize(11)
+        self.btn_solve.label.set_fontweight('bold')
         self.btn_solve.on_clicked(self._on_solve_clicked)
 
-        # Solution Board Buttons (Right area)
-        start_x_sol = 0.70
+        # Solution Navigation Buttons
+        start_x_sol = 0.74
 
         ax_prev = plt.axes([start_x_sol, y_pos, button_width, button_height])
-        self.btn_prev = Button(ax_prev, 'Prev')
+        self.btn_prev = Button(ax_prev, '◀ Prev',
+                              color=btn_style['nav']['color'],
+                              hovercolor=btn_style['nav']['hovercolor'])
+        self.btn_prev.label.set_fontsize(10)
+        self.btn_prev.label.set_fontweight('bold')
         self.btn_prev.on_clicked(self._on_prev_solution)
 
         ax_next = plt.axes([start_x_sol + gap, y_pos, button_width, button_height])
-        self.btn_next = Button(ax_next, 'Next')
+        self.btn_next = Button(ax_next, 'Next ▶',
+                              color=btn_style['nav']['color'],
+                              hovercolor=btn_style['nav']['hovercolor'])
+        self.btn_next.label.set_fontsize(10)
+        self.btn_next.label.set_fontweight('bold')
         self.btn_next.on_clicked(self._on_next_solution)
 
     def _connect_events(self):
@@ -292,61 +359,80 @@ class PuzzleGUI:
         self.fig.canvas.mpl_connect('key_press_event', self._on_key_press)
     
     def _draw_all(self):
-        """Redraw all pieces."""
-        # Clear existing patches on Setup/Palette
+        """Redraw all pieces with enhanced styling."""
         for piece in self.pieces:
             for patch in piece.patches:
                 patch.remove()
             piece.patches = []
         
-        # Draw pieces
         for piece in self.pieces:
             self._draw_piece(piece)
         
         self.fig.canvas.draw_idle()
     
     def _draw_piece(self, piece):
-        """Draw a single piece."""
+        """Draw a single piece with enhanced visual effects."""
         board_coords = piece.get_board_coords()
-        
-        # Determine which axis to draw on
         ax = self.ax_setup if piece.placed else self.ax_palette
         
         for x, y in board_coords:
-            # Determine edge color based on state
+            # Enhanced styling based on state
             if piece.selected:
-                edge_color = 'red'
-                linewidth = 3
+                edge_color = '#FFD700'
+                edge_width = 4
+                alpha = 1.0
+                zorder = 10
             elif piece.placed:
-                edge_color = 'darkblue'
-                linewidth = 2
+                edge_color = '#FFFFFF'
+                edge_width = 2.5
+                alpha = 0.9
+                zorder = 5
             else:
-                edge_color = 'gray'
-                linewidth = 1.5
+                edge_color = '#888888'
+                edge_width = 2
+                alpha = 0.85
+                zorder = 1
+
+            # Main piece rectangle with shadow effect
+            if piece.selected:
+                shadow = patches.Rectangle(
+                    (x + 0.05, y - 0.05), 0.95, 0.95,
+                    linewidth=0,
+                    facecolor='black',
+                    alpha=0.3,
+                    zorder=zorder - 1
+                )
+                ax.add_patch(shadow)
+                piece.patches.append(shadow)
             
             rect = patches.Rectangle(
                 (x, y), 1, 1,
-                linewidth=linewidth,
+                linewidth=edge_width,
                 edgecolor=edge_color,
                 facecolor=piece.color,
-                alpha=0.8 if not piece.selected else 1.0,
+                alpha=alpha,
+                zorder=zorder,
                 picker=True
             )
             ax.add_patch(rect)
             piece.patches.append(rect)
             
-            # Add piece number
+            # Add piece number with enhanced styling
+            text_color = '#000000' if sum(int(piece.color[i:i+2], 16)
+                         for i in (1, 3, 5)) > 400 else '#FFFFFF'
+
             text = ax.text(
                 x + 0.5, y + 0.5, str(piece.piece_index),
                 ha='center', va='center',
-                fontsize=10, fontweight='bold',
-                color='white'
+                fontsize=13 if piece.selected else 11,
+                fontweight='bold',
+                color=text_color,
+                zorder=zorder + 1
             )
             piece.patches.append(text)
     
     def _find_piece_at(self, x, y, ax):
         """Find piece at given coordinates."""
-        # Check in reverse order (topmost first)
         for piece in reversed(self.pieces):
             correct_ax = self.ax_setup if piece.placed else self.ax_palette
             if correct_ax != ax:
@@ -535,43 +621,48 @@ class PuzzleGUI:
                     'coords': piece.get_board_coords()
                 })
         
-        print(f"\nStarting solver with {len(fixed_pieces)} fixed pieces")
+        print(f"\n{'='*60}")
+        print(f"🔍 Starting solver with {len(fixed_pieces)} fixed pieces")
         for fp in fixed_pieces:
             print(f"  Piece #{fp['index']}: {fp['coords']}")
+        print('='*60)
 
-        # Clear previous solutions
         self.ax_solution.clear()
-        self.ax_solution.set_title("Solving...", fontsize=14, pad=10)
-        self.ax_solution.axis('off')
+        self.ax_solution.set_facecolor('#16213e')
+        self.ax_solution.text(0.5, 0.5, '⚙️ SOLVING...',
+                             transform=self.ax_solution.transAxes,
+                             ha='center', va='center',
+                             fontsize=20, fontweight='bold',
+                             color='#FFD700')
         self.fig.canvas.draw()
 
-        # Run solver (search for first 20 solutions)
-        solver = BrainBlockSolver(self.board_width, self.board_height, self.original_pieces, fixed_pieces)
+        solver = BrainBlockSolver(self.board_width, self.board_height,
+                                 self.original_pieces, fixed_pieces)
 
         self.solver_solutions = []
         try:
             solution_limit = 20
             for solution in islice(solver.solve(), solution_limit):
-                # Store necessary data to reconstruct solution grid later
-                # BrainBlockSolver.visualize_solution requires reconstructing the grid
-                # So we can just store the DLX result (list of row indices)
-                # And use the solver instance (which holds the mappings) to interpret it
-                # However, solver instance is local. We should probably keep it or helper methods.
-
-                # Let's convert the solution to a grid immediately to store it
                 grid = solver.create_solution_grid(solution)
                 self.solver_solutions.append(grid)
-                print(f"Found solution {len(self.solver_solutions)}")
+                print(f"✓ Found solution {len(self.solver_solutions)}")
         except Exception as e:
             print(f"Error during solving: {e}")
             import traceback
             traceback.print_exc()
 
-        print(f"Total solutions found: {len(self.solver_solutions)}")
+        print(f"\n{'='*60}")
+        print(f"📊 Total solutions found: {len(self.solver_solutions)}")
+        print('='*60)
 
         if not self.solver_solutions:
-            self.ax_solution.set_title("No Solution Found", fontsize=14, pad=10)
-            self.ax_solution.axis('off')
+            self.ax_solution.clear()
+            self.ax_solution.set_facecolor('#16213e')
+            self.ax_solution.text(0.5, 0.5, 'NO SOLUTION',
+                                 transform=self.ax_solution.transAxes,
+                                 ha='center', va='center',
+                                 fontsize=20, fontweight='bold',
+                                 color='#E63946')
         else:
             self.current_solution_idx = 0
             self._display_current_solution()
@@ -579,49 +670,77 @@ class PuzzleGUI:
         self.fig.canvas.draw()
 
     def _display_current_solution(self):
-        """Display the solution at current_solution_idx on ax_solution."""
+        """Display the solution with enhanced visuals."""
         self.ax_solution.clear()
-        self.ax_solution.axis('off')
-        self.ax_solution.set_xlim(0, self.board_width)
-        self.ax_solution.set_ylim(0, self.board_height)
+        self.ax_solution.set_xlim(-0.5, self.board_width + 0.5)
+        self.ax_solution.set_ylim(-0.5, self.board_height + 0.5)
         self.ax_solution.set_aspect('equal')
+        self.ax_solution.set_facecolor('#0f3460')
 
         if not self.solver_solutions:
             return
 
         grid = self.solver_solutions[self.current_solution_idx]
         
-        # Reuse pieces fixed pieces logic? No, just draw the grid.
-        # Check if we have fixed pieces in this grid?
-        # The grid contains piece indices.
+        # Draw grid lines
+        for x in range(self.board_width + 1):
+            self.ax_solution.axvline(x, color='#98D8C8', linewidth=1, alpha=0.4)
+        for y in range(self.board_height + 1):
+            self.ax_solution.axhline(y, color='#98D8C8', linewidth=1, alpha=0.4)
 
         for x in range(self.board_width):
             for y in range(self.board_height):
                 piece_idx = grid[x][y]
                 if piece_idx >= 0:
-                    color = self.cmap(piece_idx / 20)[:3]
+                    color = PIECE_COLORS[piece_idx % len(PIECE_COLORS)]
 
-                    # Check if this cell is part of a fixed piece from current GUI state?
-                    # We can iterate through self.pieces and see if they are placed and cover (x,y)
                     is_fixed = False
                     for p in self.pieces:
                         if p.placed and p.piece_index == piece_idx and p.contains_point(x, y):
-                             is_fixed = True
-                             break
+                            is_fixed = True
+                            break
 
-                    # Flip y-coordinate to match setup board orientation
-                    display_y = self.board_height - 1 - y
+                    # Add glow effect for fixed pieces
+                    if is_fixed:
+                        glow = patches.Rectangle(
+                            (x - 0.1, y - 0.1), 1.2, 1.2,
+                            linewidth=0,
+                            facecolor='#FFD700',
+                            alpha=0.3,
+                            zorder=1
+                        )
+                        self.ax_solution.add_patch(glow)
 
                     rect = patches.Rectangle(
-                        (x, display_y), 1, 1,
-                        linewidth=2.5 if is_fixed else 1.5,
-                        edgecolor='darkred' if is_fixed else 'black',
+                        (x, y), 1, 1,
+                        linewidth=3 if is_fixed else 2,
+                        edgecolor='#FFD700' if is_fixed else '#FFFFFF',
                         facecolor=color,
-                        alpha=0.9 if is_fixed else 0.7
+                        alpha=0.95,
+                        zorder=5
                     )
                     self.ax_solution.add_patch(rect)
 
-        self.ax_solution.set_title(f'Solution {self.current_solution_idx + 1} / {len(self.solver_solutions)}', fontsize=14, pad=10)
+                    # Add piece number
+                    text_color = '#000000' if sum(int(color[i:i+2], 16)
+                                 for i in (1, 3, 5)) > 400 else '#FFFFFF'
+                    self.ax_solution.text(
+                        x + 0.5, y + 0.5, str(piece_idx),
+                        ha='center', va='center',
+                        fontsize=12,
+                        fontweight='bold',
+                        color=text_color,
+                        zorder=10
+                    )
+
+        # Enhanced title
+        title_text = f'Solution {self.current_solution_idx + 1} / {len(self.solver_solutions)}'
+        self.ax_solution.set_title(title_text, fontsize=16,
+                                   fontweight='bold', color='#98D8C8', pad=15)
+
+        for spine in self.ax_solution.spines.values():
+            spine.set_edgecolor('#98D8C8')
+            spine.set_linewidth(3)
 
     def _on_prev_solution(self, event):
         if not self.solver_solutions:
@@ -754,25 +873,31 @@ class BrainBlockSolver(dlx.DLX):
 
 def main():
     """Main entry point."""
-    # Get puzzle configuration
     config = PUZZLE_SETS[PUZZLE_SET]
     board_width, board_height = config['board']
     pieces = config['pieces']
     
-    print("=" * 60)
-    print(f"Brain Block Solver - Puzzle Set {PUZZLE_SET}")
-    print(f"Board Size: {board_width} x {board_height}")
-    print(f"Number of Pieces: {len(pieces)}")
-    print("=" * 60)
-    print("\nInstructions:")
-    print("  - Left Panel: Palette")
-    print("  - Center Panel: Setup Board. Drag pieces here.")
-    print("  - Right Panel: Solution Result.")
-    print("  - Buttons allow Rotate, Delete, Reset, and Solve.")
-    print("  - After solving, use Prev/Next to view solutions.")
-    print("  - You can modify the setup and Solve again.\n")
-    
-    # Show interactive GUI
+    print("=" * 70)
+    print(f"🧩 BRAIN BLOCK PUZZLE SOLVER - Enhanced Edition")
+    print("=" * 70)
+    print(f"📋 Puzzle Set: {PUZZLE_SET}")
+    print(f"📐 Board Size: {board_width} x {board_height}")
+    print(f"🎯 Number of Pieces: {len(pieces)}")
+    print("=" * 70)
+    print("\nINSTRUCTIONS:")
+    print("  🎨 Left Panel: Piece Palette")
+    print("  🎯 Center Panel: Setup Board (drag pieces here)")
+    print("  🧩 Right Panel: Solution Display")
+    print("\n🎮 CONTROLS:")
+    print("  • Click and drag pieces between palette and board")
+    print("  • Press 'R' or click 'Rotate' to rotate selected piece")
+    print("  • Press 'Delete' or click 'Delete' to remove piece from board")
+    print("  • Click 'Reset' to return all pieces to palette")
+    print("  • Click 'SOLVE' to find solutions")
+    print("  • Use 'Prev/Next' buttons to browse through solutions")
+    print("=" * 70)
+    print()
+
     gui = PuzzleGUI(board_width, board_height, pieces)
     gui.show()
 
