@@ -428,6 +428,10 @@ class PuzzleGUI:
                         palette_y = max(palette_y, max_y + 2)
                 self.selected_piece.position = (-6, palette_y)
         
+        # Deselect piece to stop dragging
+        self.selected_piece.selected = False
+        self.selected_piece = None
+
         self._draw_all()
     
     def _on_key_press(self, event):
