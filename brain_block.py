@@ -157,6 +157,11 @@ class InteractivePiece:
         """Rotate piece 90 degrees."""
         rotated = rotate_90(list(self.coords))
         self.coords = normalize(rotated)
+    
+    def flip(self):
+        """Flip piece horizontally (mirror)."""
+        flipped = mirror_horizontal(list(self.coords))
+        self.coords = normalize(flipped)
         
     def get_board_coords(self):
         """Get actual board coordinates of the piece."""
@@ -314,7 +319,15 @@ class PuzzleGUI:
         self.btn_rotate.label.set_fontweight('bold')
         self.btn_rotate.on_clicked(self._on_rotate_clicked)
         
-        ax_remove = plt.axes([start_x + gap, y_pos, button_width, button_height])
+        ax_flip = plt.axes([start_x + gap, y_pos, button_width, button_height])
+        self.btn_flip = Button(ax_flip, '⇄ Flip',
+                              color=btn_style['rotate']['color'],
+                              hovercolor=btn_style['rotate']['hovercolor'])
+        self.btn_flip.label.set_fontsize(10)
+        self.btn_flip.label.set_fontweight('bold')
+        self.btn_flip.on_clicked(self._on_flip_clicked)
+        
+        ax_remove = plt.axes([start_x + gap * 2, y_pos, button_width, button_height])
         self.btn_remove = Button(ax_remove, '✕ Delete',
                                 color=btn_style['delete']['color'],
                                 hovercolor=btn_style['delete']['hovercolor'])
@@ -322,7 +335,7 @@ class PuzzleGUI:
         self.btn_remove.label.set_fontweight('bold')
         self.btn_remove.on_clicked(self._on_remove_clicked)
         
-        ax_reset = plt.axes([start_x + gap * 2, y_pos, button_width, button_height])
+        ax_reset = plt.axes([start_x + gap * 3, y_pos, button_width, button_height])
         self.btn_reset = Button(ax_reset, '↺ Reset',
                                color=btn_style['reset']['color'],
                                hovercolor=btn_style['reset']['hovercolor'])
@@ -330,7 +343,7 @@ class PuzzleGUI:
         self.btn_reset.label.set_fontweight('bold')
         self.btn_reset.on_clicked(self._on_reset_clicked)
         
-        ax_solve = plt.axes([start_x + gap * 3, y_pos, button_width, button_height])
+        ax_solve = plt.axes([start_x + gap * 4, y_pos, button_width, button_height])
         self.btn_solve = Button(ax_solve, '⚡ SOLVE',
                                color=btn_style['solve']['color'],
                                hovercolor=btn_style['solve']['hovercolor'])
@@ -339,7 +352,7 @@ class PuzzleGUI:
         self.btn_solve.on_clicked(self._on_solve_clicked)
 
         # Solution Navigation Buttons
-        start_x_sol = 0.74
+        start_x_sol = 0.78
 
         ax_prev = plt.axes([start_x_sol, y_pos, button_width, button_height])
         self.btn_prev = Button(ax_prev, '◀ Prev',
@@ -363,6 +376,17 @@ class PuzzleGUI:
         self.fig.canvas.mpl_connect('motion_notify_event', self._on_mouse_move)
         self.fig.canvas.mpl_connect('button_release_event', self._on_mouse_release)
         self.fig.canvas.mpl_connect('key_press_event', self._on_key_press)
+        
+        # Disable default matplotlib shortcuts that conflict with our controls
+        try:
+            # Disable 'f' for fullscreen
+            if 'f' in plt.rcParams['keymap.fullscreen']:
+                plt.rcParams['keymap.fullscreen'].remove('f')
+            # Disable 'r' for grid toggle (if exists)
+            if 'r' in plt.rcParams['keymap.home']:
+                plt.rcParams['keymap.home'].remove('r')
+        except (KeyError, ValueError):
+            pass
     
     def _draw_all(self):
         """Redraw all pieces with enhanced styling."""
@@ -635,6 +659,8 @@ class PuzzleGUI:
         """Handle keyboard input."""
         if event.key == 'r' and self.selected_piece:
             self._rotate_selected()
+        elif event.key == 'f' and self.selected_piece:
+            self._flip_selected()
         elif event.key in ['delete', 'backspace'] and self.selected_piece:
             self._remove_selected()
         elif event.key == ' ' and self.selected_piece and self.selected_piece.dragging:
@@ -661,6 +687,25 @@ class PuzzleGUI:
                 # Revert rotation
                 for _ in range(3):
                     self.selected_piece.rotate()
+        
+        self._draw_all()
+    
+    def _on_flip_clicked(self, event):
+        """Flip button clicked."""
+        self._flip_selected()
+    
+    def _flip_selected(self):
+        """Flip the selected piece horizontally."""
+        if not self.selected_piece:
+            return
+        
+        self.selected_piece.flip()
+        
+        # If placed (not dragging), check if still valid
+        if self.selected_piece.placed and not self.selected_piece.dragging:
+            if not self._is_valid_placement(self.selected_piece):
+                # Revert flip
+                self.selected_piece.flip()
         
         self._draw_all()
     
@@ -1002,6 +1047,7 @@ def main():
     print("  • Click again or press SPACE to place piece")
     print("  • Press ESC to cancel dragging and return piece")
     print("  • Press 'R' or click 'Rotate' to rotate selected piece")
+    print("  • Press 'F' or click 'Flip' to flip selected piece horizontally")
     print("  • Press 'Delete' or click 'Delete' to remove piece from board")
     print("  • Click 'Reset' to return all pieces to palette")
     print("  • Click 'SOLVE' to find solutions")
