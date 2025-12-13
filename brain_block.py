@@ -2,6 +2,7 @@
 """
 Brain Block Puzzle Solver with Enhanced Interactive GUI
 Allows users to place initial pieces before solving
+Modified: Click once to drag, click/space to place, ESC to cancel
 """
 
 import sys
@@ -147,6 +148,10 @@ class InteractivePiece:
         self.patches = []
         self.selected = False
         self.placed = False  # Whether piece is on the board
+        self.dragging = False  # Whether piece is being dragged
+        self.invalid_flash = 0  # Counter for invalid placement flash effect
+        self.original_position = None  # Store position before dragging
+        self.original_placed = False  # Store placed status before dragging
         
     def rotate(self):
         """Rotate piece 90 degrees."""
@@ -202,6 +207,7 @@ class PuzzleGUI:
         self.drag_offset = (0, 0)
         self.solver_solutions = []
         self.current_solution_idx = 0
+        self.flash_timer = None  # Timer for flash animation
         
         # Setup matplotlib figure with dark theme
         plt.style.use('dark_background')
@@ -373,11 +379,23 @@ class PuzzleGUI:
     def _draw_piece(self, piece):
         """Draw a single piece with enhanced visual effects."""
         board_coords = piece.get_board_coords()
-        ax = self.ax_setup if piece.placed else self.ax_palette
+        ax = self.ax_setup if piece.placed or piece.dragging else self.ax_palette
         
         for x, y in board_coords:
             # Enhanced styling based on state
-            if piece.selected:
+            if piece.invalid_flash > 0:
+                # Invalid placement flash effect
+                edge_color = '#FF0000'
+                edge_width = 6
+                alpha = 1.0
+                zorder = 15
+            elif piece.dragging:
+                # Dragging state
+                edge_color = '#00FF00'
+                edge_width = 3.5
+                alpha = 0.95
+                zorder = 12
+            elif piece.selected:
                 edge_color = '#FFD700'
                 edge_width = 4
                 alpha = 1.0
@@ -394,7 +412,7 @@ class PuzzleGUI:
                 zorder = 1
 
             # Main piece rectangle with shadow effect
-            if piece.selected:
+            if piece.selected or piece.dragging:
                 shadow = patches.Rectangle(
                     (x + 0.05, y - 0.05), 0.95, 0.95,
                     linewidth=0,
@@ -424,7 +442,7 @@ class PuzzleGUI:
             text = ax.text(
                 x + 0.5, y + 0.5, str(piece.piece_index),
                 ha='center', va='center',
-                fontsize=13 if piece.selected else 11,
+                fontsize=13 if piece.selected or piece.dragging else 11,
                 fontweight='bold',
                 color=text_color,
                 zorder=zorder + 1
@@ -434,7 +452,7 @@ class PuzzleGUI:
     def _find_piece_at(self, x, y, ax):
         """Find piece at given coordinates."""
         for piece in reversed(self.pieces):
-            correct_ax = self.ax_setup if piece.placed else self.ax_palette
+            correct_ax = self.ax_setup if piece.placed or piece.dragging else self.ax_palette
             if correct_ax != ax:
                 continue
             if piece.contains_point(x, y):
@@ -461,20 +479,32 @@ class PuzzleGUI:
         return True
     
     def _on_mouse_press(self, event):
-        """Handle mouse click."""
+        """Handle mouse click - toggle dragging mode or place piece."""
         if event.inaxes not in [self.ax_palette, self.ax_setup]:
             return
         
+        # If we have a piece being dragged, try to place it
+        if self.selected_piece and self.selected_piece.dragging:
+            self._try_place_piece()
+            return
+        
+        # Otherwise, try to pick up a piece
         piece = self._find_piece_at(event.xdata, event.ydata, event.inaxes)
         
         if piece:
             # Deselect previous
             if self.selected_piece and self.selected_piece != piece:
                 self.selected_piece.selected = False
+                self.selected_piece.dragging = False
             
-            # Select new piece
+            # Select and start dragging new piece
             self.selected_piece = piece
             piece.selected = True
+            piece.dragging = True
+            
+            # Store original position for ESC cancel
+            piece.original_position = piece.position
+            piece.original_placed = piece.placed
             
             # Calculate drag offset
             board_coords = piece.get_board_coords()
@@ -488,12 +518,16 @@ class PuzzleGUI:
             # Deselect if clicking empty space
             if self.selected_piece:
                 self.selected_piece.selected = False
+                self.selected_piece.dragging = False
                 self.selected_piece = None
                 self._draw_all()
     
     def _on_mouse_move(self, event):
-        """Handle mouse drag."""
-        if not self.selected_piece or event.inaxes not in [self.ax_palette, self.ax_setup]:
+        """Handle mouse drag - only when piece is in dragging mode."""
+        if not self.selected_piece or not self.selected_piece.dragging:
+            return
+        
+        if event.inaxes not in [self.ax_palette, self.ax_setup]:
             return
         
         # Move piece to follow mouse
@@ -502,50 +536,99 @@ class PuzzleGUI:
             event.ydata - self.drag_offset[1]
         )
         
-        # Update placed status based on which axis
-        self.selected_piece.placed = (event.inaxes == self.ax_setup)
-        
         self._draw_all()
     
     def _on_mouse_release(self, event):
-        """Handle mouse release."""
+        """Mouse release no longer places pieces - only click or space does."""
+        pass
+    
+    def _try_place_piece(self):
+        """Try to place the currently dragging piece."""
+        if not self.selected_piece or not self.selected_piece.dragging:
+            return
+        
+        # Snap to grid
+        board_coords = self.selected_piece.get_board_coords()
+        if board_coords:
+            avg_x = sum(x for x, y in board_coords) / len(board_coords)
+            avg_y = sum(y for x, y in board_coords) / len(board_coords)
+            snap_x = round(avg_x)
+            snap_y = round(avg_y)
+            
+            offset_x = snap_x - avg_x
+            offset_y = snap_y - avg_y
+            
+            self.selected_piece.position = (
+                self.selected_piece.position[0] + int(offset_x),
+                self.selected_piece.position[1] + int(offset_y)
+            )
+        
+        # Check if position is on board
+        board_coords = self.selected_piece.get_board_coords()
+        is_on_board = all(
+            0 <= x < self.board_width and 0 <= y < self.board_height
+            for x, y in board_coords
+        )
+        
+        if is_on_board:
+            # Check if valid placement
+            if self._is_valid_placement(self.selected_piece):
+                # Valid placement - place piece
+                self.selected_piece.placed = True
+                self.selected_piece.dragging = False
+                self.selected_piece.selected = False
+                self.selected_piece = None
+                self._draw_all()
+            else:
+                # Invalid placement - show flash effect
+                self._show_invalid_flash()
+        else:
+            # Not on board - return to palette
+            self._return_to_palette()
+    
+    def _show_invalid_flash(self):
+        """Show visual feedback for invalid placement."""
         if not self.selected_piece:
             return
         
-        # If on board, snap to grid and validate
-        if self.selected_piece.placed:
-            # Snap to grid
-            board_coords = self.selected_piece.get_board_coords()
-            if board_coords:
-                avg_x = sum(x for x, y in board_coords) / len(board_coords)
-                avg_y = sum(y for x, y in board_coords) / len(board_coords)
-                snap_x = round(avg_x)
-                snap_y = round(avg_y)
-                
-                offset_x = snap_x - avg_x
-                offset_y = snap_y - avg_y
-                
-                self.selected_piece.position = (
-                    self.selected_piece.position[0] + int(offset_x),
-                    self.selected_piece.position[1] + int(offset_y)
-                )
-            
-            # Check if valid
-            if not self._is_valid_placement(self.selected_piece):
-                # Return to palette
-                self.selected_piece.placed = False
-                # Find empty spot in palette
-                palette_y = 0
-                for p in self.pieces:
-                    if not p.placed and p != self.selected_piece:
-                        max_y = max(y for x, y in p.get_board_coords())
-                        palette_y = max(palette_y, max_y + 2)
-                self.selected_piece.position = (-6, palette_y)
+        self.selected_piece.invalid_flash = 3  # Flash 3 times
+        self._animate_flash()
+    
+    def _animate_flash(self):
+        """Animate the invalid placement flash."""
+        if not self.selected_piece or self.selected_piece.invalid_flash <= 0:
+            if self.selected_piece:
+                self.selected_piece.invalid_flash = 0
+                self._draw_all()
+            return
         
-        # Deselect piece to stop dragging
+        self.selected_piece.invalid_flash -= 1
+        self._draw_all()
+        
+        # Schedule next flash
+        self.flash_timer = self.fig.canvas.new_timer(interval=150)
+        self.flash_timer.single_shot = True
+        self.flash_timer.add_callback(self._animate_flash)
+        self.flash_timer.start()
+    
+    def _return_to_palette(self):
+        """Return dragging piece to palette."""
+        if not self.selected_piece:
+            return
+        
+        self.selected_piece.placed = False
+        self.selected_piece.dragging = False
         self.selected_piece.selected = False
+        
+        # Find empty spot in palette
+        palette_y = 0
+        for p in self.pieces:
+            if not p.placed and p != self.selected_piece:
+                max_y = max(y for x, y in p.get_board_coords())
+                palette_y = max(palette_y, max_y + 2)
+        
+        self.selected_piece.position = (-6, palette_y)
         self.selected_piece = None
-
         self._draw_all()
     
     def _on_key_press(self, event):
@@ -554,6 +637,12 @@ class PuzzleGUI:
             self._rotate_selected()
         elif event.key in ['delete', 'backspace'] and self.selected_piece:
             self._remove_selected()
+        elif event.key == ' ' and self.selected_piece and self.selected_piece.dragging:
+            # Space bar places piece
+            self._try_place_piece()
+        elif event.key == 'escape' and self.selected_piece and self.selected_piece.dragging:
+            # ESC cancels dragging and returns to original position
+            self._cancel_dragging()
     
     def _on_rotate_clicked(self, event):
         """Rotate button clicked."""
@@ -566,13 +655,32 @@ class PuzzleGUI:
         
         self.selected_piece.rotate()
         
-        # If on board, check if still valid
-        if self.selected_piece.placed:
+        # If placed (not dragging), check if still valid
+        if self.selected_piece.placed and not self.selected_piece.dragging:
             if not self._is_valid_placement(self.selected_piece):
                 # Revert rotation
                 for _ in range(3):
                     self.selected_piece.rotate()
         
+        self._draw_all()
+    
+    def _cancel_dragging(self):
+        """Cancel dragging and return piece to original position."""
+        if not self.selected_piece or not self.selected_piece.dragging:
+            return
+        
+        # Restore original position
+        if hasattr(self.selected_piece, 'original_position'):
+            self.selected_piece.position = self.selected_piece.original_position
+            self.selected_piece.placed = self.selected_piece.original_placed
+        else:
+            # Fallback: return to palette
+            self._return_to_palette()
+            return
+        
+        self.selected_piece.dragging = False
+        self.selected_piece.selected = False
+        self.selected_piece = None
         self._draw_all()
     
     def _on_remove_clicked(self, event):
@@ -599,6 +707,7 @@ class PuzzleGUI:
         for piece in self.pieces:
             piece.placed = False
             piece.selected = False
+            piece.dragging = False
         
         # Reposition in palette
         palette_y = 0
@@ -889,12 +998,15 @@ def main():
     print("  🎯 Center Panel: Setup Board (drag pieces here)")
     print("  🧩 Right Panel: Solution Display")
     print("\n🎮 CONTROLS:")
-    print("  • Click and drag pieces between palette and board")
+    print("  • Click piece once to start dragging")
+    print("  • Click again or press SPACE to place piece")
+    print("  • Press ESC to cancel dragging and return piece")
     print("  • Press 'R' or click 'Rotate' to rotate selected piece")
     print("  • Press 'Delete' or click 'Delete' to remove piece from board")
     print("  • Click 'Reset' to return all pieces to palette")
     print("  • Click 'SOLVE' to find solutions")
     print("  • Use 'Prev/Next' buttons to browse through solutions")
+    print("  • Invalid placements will show red flashing border")
     print("=" * 70)
     print()
 
