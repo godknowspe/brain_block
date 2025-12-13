@@ -216,7 +216,10 @@ class PuzzleGUI:
         
         # Setup matplotlib figure with dark theme
         plt.style.use('dark_background')
-        self.fig = plt.figure(figsize=(20, 10), facecolor='#1a1a2e')
+        
+        # Get screen resolution and adjust figure size
+        figsize = self._get_optimal_figsize()
+        self.fig = plt.figure(figsize=figsize, facecolor='#1a1a2e')
 
         # Create custom grid layout
         gs = self.fig.add_gridspec(1, 3, width_ratios=[0.6, 1.2, 1.2],
@@ -230,6 +233,106 @@ class PuzzleGUI:
         self._setup_buttons()
         self._connect_events()
         self._draw_all()
+        
+    def _get_optimal_figsize(self):
+        """Calculate optimal figure size based on screen resolution."""
+        screen_width = None
+        screen_height = None
+        
+        # Method 1: Try tkinter
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            root.withdraw()
+            screen_width = root.winfo_screenwidth()
+            screen_height = root.winfo_screenheight()
+            root.destroy()
+            method = "tkinter"
+        except:
+            pass
+        
+        # Method 2: Try PyQt5/PyQt6
+        if screen_width is None:
+            try:
+                from PyQt5.QtWidgets import QApplication
+                app = QApplication.instance()
+                if app is None:
+                    app = QApplication([])
+                screen = app.primaryScreen()
+                screen_size = screen.size()
+                screen_width = screen_size.width()
+                screen_height = screen_size.height()
+                method = "PyQt5"
+            except:
+                try:
+                    from PyQt6.QtWidgets import QApplication
+                    app = QApplication.instance()
+                    if app is None:
+                        app = QApplication([])
+                    screen = app.primaryScreen()
+                    screen_size = screen.size()
+                    screen_width = screen_size.width()
+                    screen_height = screen_size.height()
+                    method = "PyQt6"
+                except:
+                    pass
+        
+        # Method 3: Try screeninfo
+        if screen_width is None:
+            try:
+                from screeninfo import get_monitors
+                monitor = get_monitors()[0]
+                screen_width = monitor.width
+                screen_height = monitor.height
+                method = "screeninfo"
+            except:
+                pass
+        
+        # Method 4: Try matplotlib's own figure manager
+        if screen_width is None:
+            try:
+                import matplotlib
+                backend = matplotlib.get_backend()
+                if 'Qt' in backend:
+                    from matplotlib.backends.backend_qt5 import FigureManagerQT
+                    temp_fig = plt.figure()
+                    manager = temp_fig.canvas.manager
+                    screen_width = manager.window.screen().size().width()
+                    screen_height = manager.window.screen().size().height()
+                    plt.close(temp_fig)
+                    method = "matplotlib Qt"
+            except:
+                pass
+        
+        # If all methods fail, use default
+        if screen_width is None or screen_height is None:
+            print(f"⚠️ Could not detect screen size")
+            print(f"💡 Tip: Install screeninfo with: pip install screeninfo")
+            print(f"📐 Using default figure size: 20x10 inches")
+            return (20, 10)
+        
+        # Convert pixels to inches (assuming 100 DPI)
+        dpi = 100
+        max_width = (screen_width * 0.95) / dpi  # Use 95% of screen width
+        max_height = (screen_height * 0.90) / dpi  # Use 90% of screen height
+        
+        # Desired aspect ratio (width:height = 2:1)
+        desired_width = 20
+        desired_height = 10
+        
+        # Scale down if necessary
+        if desired_width > max_width or desired_height > max_height:
+            scale = min(max_width / desired_width, max_height / desired_height)
+            width = desired_width * scale
+            height = desired_height * scale
+        else:
+            width = desired_width
+            height = desired_height
+        
+        print(f"📺 Screen resolution: {screen_width}x{screen_height} (detected via {method})")
+        print(f"📐 Figure size: {width:.1f}x{height:.1f} inches")
+        
+        return (width, height)
         
     
     def _setup_axes(self):
@@ -912,6 +1015,34 @@ class PuzzleGUI:
     
     def show(self):
         """Display the GUI."""
+        # Try to maximize window
+        try:
+            manager = plt.get_current_fig_manager()
+            # Try different backends
+            if hasattr(manager, 'window'):
+                # For TkAgg backend
+                try:
+                    manager.window.state('zoomed')  # Windows
+                except:
+                    try:
+                        manager.window.attributes('-zoomed', True)  # Linux
+                    except:
+                        pass
+            elif hasattr(manager, 'frame'):
+                # For WxAgg backend
+                try:
+                    manager.frame.Maximize(True)
+                except:
+                    pass
+            elif hasattr(manager, 'full_screen_toggle'):
+                # For Qt backend
+                try:
+                    manager.window.showMaximized()
+                except:
+                    pass
+        except Exception as e:
+            print(f"⚠️ Could not maximize window: {e}")
+        
         plt.show()
 
 
