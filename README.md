@@ -1,1 +1,4 @@
-Init GUI version, use 'poetry install' to rebuild venv
+Use 'poetry install' to rebuild venv
+
+To run:
+poetry run python brain_block.py
